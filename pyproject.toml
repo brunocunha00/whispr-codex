@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "whispr-codex"
+version = "0.1.0"
+description = "Windows-first terminal dictation CLI built around OpenAI Whisper models via whisper.cpp."
+readme = "README.md"
+requires-python = ">=3.13"
+license = {text = "MIT"}
+authors = [
+  {name = "OpenAI Codex"}
+]
+dependencies = [
+  "keyboard>=0.13.5",
+  "numpy>=2.2.0",
+  "rich>=13.9.4",
+  "sounddevice>=0.5.1",
+  "typer>=0.16.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.4"
+]
+build = [
+  "pyinstaller>=6.11.1"
+]
+
+[project.scripts]
+whispr = "whispr.cli:app"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
