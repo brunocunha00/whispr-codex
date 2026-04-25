@@ -10,6 +10,7 @@ class ConfigTests(unittest.TestCase):
         rendered = config_template(AppConfig())
         self.assertIn('hotkey = "f9"', rendered)
         self.assertIn('backend = "auto"', rendered)
+        self.assertIn('telegram_allowed_chat_ids = []', rendered)
 
     def test_ensure_default_config_creates_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir_name:
@@ -27,8 +28,10 @@ class ConfigTests(unittest.TestCase):
             (base_dir / "tmp").mkdir()
             model_path = base_dir / "models" / "ggml-small.bin"
             cli_path = base_dir / "bin" / "whisper-cli.exe"
+            ffmpeg_path = base_dir / "bin" / "ffmpeg.exe"
             model_path.write_text("stub", encoding="utf-8")
             cli_path.write_text("stub", encoding="utf-8")
+            ffmpeg_path.write_text("stub", encoding="utf-8")
             config_path = base_dir / "config.toml"
             config_path.write_text(
                 "\n".join(
@@ -38,6 +41,7 @@ class ConfigTests(unittest.TestCase):
                         'backend = "cpu"',
                         'model_path = "models\\\\ggml-small.bin"',
                         'whisper_cpp_path = "bin\\\\whisper-cli.exe"',
+                        'ffmpeg_path = "bin\\\\ffmpeg.exe"',
                         "step_ms = 1000",
                         "window_ms = 6000",
                         "sample_rate = 16000",
@@ -50,6 +54,10 @@ class ConfigTests(unittest.TestCase):
                         "keep_wav_artifacts = false",
                         'temp_dir = "tmp"',
                         'vad_model_path = ""',
+                        'telegram_bot_token = "token"',
+                        "telegram_allowed_chat_ids = [1234]",
+                        "telegram_poll_timeout_s = 15",
+                        'telegram_api_base_url = "https://api.telegram.org"',
                         "",
                     ]
                 ),
@@ -58,6 +66,7 @@ class ConfigTests(unittest.TestCase):
             loaded = load_config(config_path)
             self.assertEqual(loaded.model_file, model_path.resolve())
             self.assertEqual(loaded.resolve_whisper_cpp_path(), cli_path.resolve())
+            self.assertEqual(loaded.resolve_ffmpeg_path(), ffmpeg_path.resolve())
 
     def test_validation_rejects_invalid_backend(self) -> None:
         with self.assertRaises(ValueError):
@@ -70,6 +79,10 @@ class ConfigTests(unittest.TestCase):
     def test_validation_rejects_invalid_indicator_position(self) -> None:
         with self.assertRaises(ValueError):
             AppConfig(capture_indicator_position="centro").validate()
+
+    def test_validation_rejects_non_integer_telegram_chat_ids(self) -> None:
+        with self.assertRaises(ValueError):
+            AppConfig(telegram_allowed_chat_ids=["abc"]).validate()
 
 
 if __name__ == "__main__":

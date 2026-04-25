@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "generatedAt": "2026-04-23T03:10:00.000Z",
+  "source": "manual",
+  "stack": {
+    "primaryLanguage": "python",
+    "languages": [
+      "python"
+    ],
+    "frameworks": [],
+    "buildTools": [
+      "pyinstaller",
+      "powershell"
+    ],
+    "testFrameworks": [
+      "pytest"
+    ],
+    "packageManager": "pip"
+  },
+  "sensors": [
+    {
+      "id": "pytest",
+      "name": "Pytest",
+      "description": "Run the automated unit test suite",
+      "severity": "critical",
+      "command": "python -m pytest"
+    },
+    {
+      "id": "doctor",
+      "name": "Doctor",
+      "description": "Validate local runtime prerequisites and configured paths",
+      "severity": "critical",
+      "command": "python -m whispr doctor"
+    },
+    {
+      "id": "devices",
+      "name": "Devices",
+      "description": "List available audio input devices",
+      "severity": "warning",
+      "command": "python -m whispr devices"
+    },
+    {
+      "id": "benchmark",
+      "name": "Benchmark",
+      "description": "Exercise both Vulkan and CPU transcription paths when environment is configured",
+      "severity": "warning",
+      "command": "python -m whispr benchmark"
+    }
+  ]
+}

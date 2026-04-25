@@ -13,6 +13,7 @@ from whispr.audio import list_input_devices
 from whispr.config import DEFAULT_CONFIG_PATH, DEFAULT_MODELS_DIR, AppConfig, ensure_default_config, load_config
 from whispr.diagnostics import collect_doctor_checks, run_benchmark
 from whispr.engine import EngineDependencyError, WhisperCppEngine
+from whispr.telegram import TelegramAudioListener, TelegramDependencyError
 
 
 app = typer.Typer(no_args_is_help=True, help="Ditado local Windows-first com whisper.cpp.")
@@ -32,7 +33,7 @@ def _load_config_with_overrides(
     return config.validate()
 
 
-def _validate_run_prerequisites(config: AppConfig) -> None:
+def _validate_transcription_prerequisites(config: AppConfig) -> None:
     errors: list[str] = []
     if config.resolve_whisper_cpp_path() is None:
         errors.append("whisper-cli nao encontrado. Ajuste 'whisper_cpp_path' no config ou deixe o executavel no PATH.")
@@ -118,9 +119,47 @@ def run(
     model_path: Annotated[Path | None, typer.Option("--model-path", help="Sobrescreve model_path do config.")] = None,
 ) -> None:
     config = _load_config_with_overrides(config_path, backend=backend, model_path=model_path)
-    _validate_run_prerequisites(config)
+    _validate_transcription_prerequisites(config)
     app_runtime = DictationApp(config)
     app_runtime.run()
+
+
+@app.command("telegram-listen")
+def telegram_listen(
+    config_path: Annotated[Path | None, typer.Option("--config-path", help="Caminho alternativo do config.")] = None,
+    backend: Annotated[str | None, typer.Option("--backend", help="Sobrescreve backend do config.")] = None,
+    model_path: Annotated[Path | None, typer.Option("--model-path", help="Sobrescreve model_path do config.")] = None,
+    once: Annotated[bool, typer.Option("--once", help="Executa um unico ciclo de polling e sai.")] = False,
+) -> None:
+    config = _load_config_with_overrides(config_path, backend=backend, model_path=model_path)
+    _validate_transcription_prerequisites(config)
+
+    errors: list[str] = []
+    if not config.telegram_bot_token.strip():
+        errors.append("telegram_bot_token nao configurado.")
+    if not config.telegram_allowed_chat_ids:
+        errors.append("telegram_allowed_chat_ids precisa ter ao menos um chat autorizado.")
+    if config.resolve_ffmpeg_path() is None:
+        errors.append("ffmpeg nao encontrado. Ajuste 'ffmpeg_path' no config ou deixe o executavel no PATH.")
+    if errors:
+        for error in errors:
+            console.print(f"[red]Erro:[/red] {error}")
+        raise typer.Exit(code=1)
+
+    try:
+        listener = TelegramAudioListener(
+            config=config,
+            engine=WhisperCppEngine(config),
+            console=console,
+        )
+    except TelegramDependencyError as exc:
+        console.print(f"[red]Erro:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    if once:
+        listener.poll_once()
+        return
+    listener.run_forever()
 
 
 @app.command()

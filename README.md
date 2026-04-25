@@ -5,6 +5,7 @@ CLI de ditado local para Windows com captura por hotkey global, transcricao incr
 ## O que ele faz
 
 - Roda via terminal com `whispr run`.
+- Roda um listener opcional via `whispr telegram-listen` para transcrever audios recebidos por bot do Telegram.
 - Inicia captura enquanto a hotkey estiver pressionada.
 - Transcreve em janelas deslizantes usando `whisper.cpp` com modelos `Whisper` da OpenAI executados localmente.
 - Digita apenas o prefixo estabilizado na janela em foco, evitando apagar texto ja enviado.
@@ -26,6 +27,7 @@ CLI de ditado local para Windows com captura por hotkey global, transcricao incr
 - CMake 3.27+
 - Visual Studio Build Tools ou MSVC equivalente
 - Driver de video com suporte a Vulkan se quiser tentar GPU
+- `ffmpeg` no PATH ou configurado via `ffmpeg_path` se quiser usar `telegram-listen`
 
 ## Instalacao do projeto
 
@@ -60,6 +62,30 @@ notepad "$env:APPDATA\whispr\config.toml"
 4. Execute `whispr run`.
 5. Mantenha `F9` pressionado para ditar no app com foco.
 
+## Listener do Telegram
+
+O listener do Telegram roda separado do push-to-talk local e reaproveita o mesmo pipeline de transcricao. A v1 escuta via long polling, aceita apenas chats explicitamente autorizados e imprime a transcricao no terminal.
+
+Passos minimos:
+
+1. Crie um bot com o BotFather e obtenha o token.
+2. Instale `ffmpeg` ou aponte `ffmpeg_path` no config.
+3. Descubra o `chat_id` autorizado.
+4. Preencha as chaves do Telegram no `config.toml`.
+5. Rode `whispr telegram-listen`.
+
+Exemplo:
+
+```powershell
+whispr telegram-listen
+```
+
+Para um unico ciclo de polling:
+
+```powershell
+whispr telegram-listen --once
+```
+
 ## Build Portatil
 
 Para gerar uma pasta pronta para copiar para outra maquina Windows x64:
@@ -69,6 +95,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\build-portable.ps1 `
   -WhisperCliPath "D:\repositorio\bc-developer\whisper.cpp\build\bin\Release\whisper-cli.exe" `
   -ModelPath "D:\repositorio\bc-developer\whisper.cpp\models\ggml-small.bin" `
+  -FfmpegPath "C:\ffmpeg\bin\ffmpeg.exe" `
   -Clean
 ```
 
@@ -76,11 +103,28 @@ Saida esperada:
 
 - `dist-portable\whispr\whispr.exe`
 - `dist-portable\whispr\vendor\whispercpp\*.dll`
+- `dist-portable\whispr\vendor\ffmpeg\ffmpeg.exe` se `-FfmpegPath` for informado
 - `dist-portable\whispr\models\ggml-small.bin`
 - `dist-portable\whispr\config.toml`
 - `dist-portable\whispr.zip`
 
 Na outra maquina, extraia a pasta ou zip e rode `whispr.exe`. Nessa modalidade, o app usa o `config.toml` ao lado do executavel e resolve caminhos relativos sem depender de `%APPDATA%`.
+
+Se voce quiser que o modo `telegram-listen` funcione dentro do bundle, passe tambem `-FfmpegPath` no build para que o binario do `ffmpeg` siga dentro do pacote.
+
+Se voce quiser um unico `whispr.exe` com `whisper-cli`, modelo e `ffmpeg` embutidos no binario, use o modo single-file:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\build-portable.ps1 `
+  -WhisperCliPath "D:\repositorio\bc-developer\whisper.cpp\build\bin\Release\whisper-cli.exe" `
+  -ModelPath "D:\repositorio\bc-developer\whisper.cpp\models\ggml-small.bin" `
+  -FfmpegPath "C:\ffmpeg\bin\ffmpeg.exe" `
+  -SingleFile `
+  -Clean
+```
+
+Nesse modo, `whispr.exe` fica sozinho no diretório de saida e extrai os binarios internos em tempo de execucao. O script ainda gera um `config.toml` ao lado do executavel para voce editar token do Telegram, `chat_id` e overrides locais.
 
 ## Comandos
 
@@ -90,6 +134,7 @@ whispr doctor        Verifica ambiente, caminhos e dependencias opcionais
 whispr devices       Lista dispositivos de entrada de audio
 whispr benchmark     Compara CPU e GPU com um sample sintetico
 whispr run           Inicia o loop de ditado
+whispr telegram-listen  Escuta audios do Telegram e imprime a transcricao no terminal
 ```
 
 ## Configuracao
@@ -102,6 +147,7 @@ language = "pt"
 backend = "auto"
 model_path = "C:\\Users\\you\\AppData\\Roaming\\whispr\\models\\ggml-small.bin"
 whisper_cpp_path = "C:\\Users\\you\\src\\whisper.cpp\\build\\bin\\Release\\whisper-cli.exe"
+ffmpeg_path = "C:\\ffmpeg\\bin\\ffmpeg.exe"
 step_ms = 1000
 window_ms = 6000
 sample_rate = 16000
@@ -114,6 +160,10 @@ capture_indicator_position = "top-right"
 keep_wav_artifacts = false
 temp_dir = "C:\\Users\\you\\AppData\\Roaming\\whispr\\tmp"
 vad_model_path = ""
+telegram_bot_token = ""
+telegram_allowed_chat_ids = [123456789]
+telegram_poll_timeout_s = 30
+telegram_api_base_url = "https://api.telegram.org"
 ```
 
 ## Observacoes
@@ -123,6 +173,7 @@ vad_model_path = ""
 - `inject_mode = "auto"` usa `clipboard + Ctrl+V` e restaura o clipboard anterior; se isso falhar, cai para `SendInput`.
 - `show_capture_indicator = true` exibe um ponto vermelho com `REC` enquanto a hotkey estiver pressionada.
 - A v1 nao faz `backspace` em texto ja digitado para evitar efeitos colaterais em apps de terceiros.
+- `telegram-listen` exige `telegram_bot_token`, `telegram_allowed_chat_ids` e `ffmpeg`.
 
 ## Referencias
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import os
 import shutil
@@ -28,6 +28,13 @@ def _portable_base_dir() -> Path | None:
     return None
 
 
+def _bundle_base_dir() -> Path | None:
+    bundle_dir = getattr(sys, "_MEIPASS", None)
+    if bundle_dir:
+        return Path(bundle_dir).resolve()
+    return None
+
+
 def _default_config_dir() -> Path:
     portable_dir = _portable_base_dir()
     if portable_dir is not None:
@@ -48,6 +55,7 @@ class AppConfig:
     backend: str = "auto"
     model_path: str = str(DEFAULT_MODELS_DIR / "ggml-small.bin")
     whisper_cpp_path: str = ""
+    ffmpeg_path: str = ""
     step_ms: int = 1000
     window_ms: int = 6000
     sample_rate: int = 16000
@@ -60,6 +68,10 @@ class AppConfig:
     keep_wav_artifacts: bool = False
     temp_dir: str = str(DEFAULT_TEMP_DIR)
     vad_model_path: str = ""
+    telegram_bot_token: str = ""
+    telegram_allowed_chat_ids: list[int] = field(default_factory=list)
+    telegram_poll_timeout_s: int = 30
+    telegram_api_base_url: str = "https://api.telegram.org"
     _config_dir: str = ""
 
     def validate(self) -> "AppConfig":
@@ -81,6 +93,11 @@ class AppConfig:
             raise ValueError("sample_rate deve ser 16000 para a v1")
         if self.threads <= 0:
             raise ValueError("threads deve ser maior que zero")
+        if self.telegram_poll_timeout_s <= 0:
+            raise ValueError("telegram_poll_timeout_s deve ser maior que zero")
+        for chat_id in self.telegram_allowed_chat_ids:
+            if not isinstance(chat_id, int) or isinstance(chat_id, bool):
+                raise ValueError("telegram_allowed_chat_ids deve conter apenas inteiros")
         return self
 
     @property
@@ -101,8 +118,24 @@ class AppConfig:
         candidate = Path(os.path.expandvars(value)).expanduser()
         if candidate.is_absolute():
             return candidate
+
+        search_bases: list[Path] = []
         if self._config_dir:
-            return (Path(self._config_dir) / candidate).resolve()
+            search_bases.append(Path(self._config_dir))
+        bundle_dir = _bundle_base_dir()
+        if bundle_dir is not None and bundle_dir not in search_bases:
+            search_bases.append(bundle_dir)
+        portable_dir = _portable_base_dir()
+        if portable_dir is not None and portable_dir not in search_bases:
+            search_bases.append(portable_dir)
+
+        for base in search_bases:
+            resolved = (base / candidate).resolve()
+            if resolved.exists():
+                return resolved
+
+        if search_bases:
+            return (search_bases[0] / candidate).resolve()
         return candidate.resolve()
 
     def resolve_whisper_cpp_path(self) -> Path | None:
@@ -123,6 +156,24 @@ class AppConfig:
                     return path
         return None
 
+    def resolve_ffmpeg_path(self) -> Path | None:
+        configured = self.ffmpeg_path.strip()
+        if configured:
+            candidate = self.resolve_path(configured)
+            if candidate.exists():
+                return candidate
+
+        candidates = [
+            shutil.which("ffmpeg.exe"),
+            shutil.which("ffmpeg"),
+        ]
+        for item in candidates:
+            if item:
+                path = Path(item)
+                if path.exists():
+                    return path
+        return None
+
 
 def config_template(config: AppConfig | None = None) -> str:
     cfg = (config or AppConfig()).validate()
@@ -131,12 +182,16 @@ def config_template(config: AppConfig | None = None) -> str:
         escaped = value.replace("\\", "\\\\").replace('"', '\\"')
         return f'"{escaped}"'
 
+    def render_list(values: list[int]) -> str:
+        return "[" + ", ".join(str(value) for value in values) + "]"
+
     lines = [
         f"hotkey = {quote(cfg.hotkey)}",
         f"language = {quote(cfg.language)}",
         f"backend = {quote(cfg.backend)}",
         f"model_path = {quote(str(cfg.model_file))}",
         f"whisper_cpp_path = {quote(cfg.whisper_cpp_path)}",
+        f"ffmpeg_path = {quote(cfg.ffmpeg_path)}",
         f"step_ms = {cfg.step_ms}",
         f"window_ms = {cfg.window_ms}",
         f"sample_rate = {cfg.sample_rate}",
@@ -149,6 +204,10 @@ def config_template(config: AppConfig | None = None) -> str:
         f"keep_wav_artifacts = {str(cfg.keep_wav_artifacts).lower()}",
         f"temp_dir = {quote(str(cfg.temp_directory))}",
         f"vad_model_path = {quote(cfg.vad_model_path)}",
+        f"telegram_bot_token = {quote(cfg.telegram_bot_token)}",
+        f"telegram_allowed_chat_ids = {render_list(cfg.telegram_allowed_chat_ids)}",
+        f"telegram_poll_timeout_s = {cfg.telegram_poll_timeout_s}",
+        f"telegram_api_base_url = {quote(cfg.telegram_api_base_url)}",
         "",
     ]
     return "\n".join(lines)

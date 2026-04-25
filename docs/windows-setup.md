@@ -40,9 +40,15 @@ Preencha ao menos:
 
 - `whisper_cpp_path`
 - `model_path`
+- `ffmpeg_path` se voce for usar `telegram-listen`
 - `backend = "cpu"` se o benchmark mostrar CPU mais rapida
 - `inject_mode = "auto"` para usar clipboard com fallback
 - `show_capture_indicator = true` para manter o overlay visual durante a captura
+
+Se quiser usar Telegram, preencha tambem:
+
+- `telegram_bot_token`
+- `telegram_allowed_chat_ids`
 
 ## 5. Validar
 

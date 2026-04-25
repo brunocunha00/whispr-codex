@@ -31,6 +31,17 @@ def collect_doctor_checks(config: AppConfig) -> list[DoctorCheck]:
             str(cli_path) if cli_path else "Nao encontrado. Ajuste whisper_cpp_path ou PATH.",
         )
     )
+    telegram_enabled = bool(config.telegram_bot_token.strip()) or bool(config.telegram_allowed_chat_ids)
+    ffmpeg_path = config.resolve_ffmpeg_path()
+    checks.append(
+        DoctorCheck(
+            "ffmpeg",
+            ffmpeg_path is not None or not telegram_enabled,
+            str(ffmpeg_path)
+            if ffmpeg_path
+            else "Nao encontrado. Necessario apenas para audio do Telegram.",
+        )
+    )
     checks.append(
         DoctorCheck(
             "model",
@@ -66,6 +77,16 @@ def collect_doctor_checks(config: AppConfig) -> list[DoctorCheck]:
             "injector",
             injector_supported(),
             "SendInput disponivel" if injector_supported() else "Aplicacao foi desenhada para Windows.",
+        )
+    )
+    checks.append(
+        DoctorCheck(
+            "telegram-config",
+            (bool(config.telegram_bot_token.strip()) and bool(config.telegram_allowed_chat_ids))
+            or not telegram_enabled,
+            "Token e chats permitidos configurados"
+            if config.telegram_bot_token.strip() and config.telegram_allowed_chat_ids
+            else "Nao configurado. Necessario apenas para telegram-listen.",
         )
     )
     return checks
